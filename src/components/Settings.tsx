@@ -87,7 +87,7 @@ const Settings: React.FC = () => {
     };
 
     const handleDeleteCustomer = async (customerId: string, customerName: string) => {
-        if (!confirm(`هل أنت متأكد من حذف العميل: ${customerName}؟`)) {
+        if (!confirm(`⚠️ هل أنت متأكد من حذف العميل: ${customerName}؟\n\nتحذير: هذا الإجراء نهائي ولا يمكن التراجع عنه!`)) {
             return;
         }
 

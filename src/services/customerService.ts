@@ -103,15 +103,14 @@ export const customerService = {
   },
 
   /**
-   * Soft delete a customer (set isActive to false)
+   * Permanently delete a customer
    */
   async deleteCustomer(customerId: string): Promise<void> {
     try {
-      await databases.updateDocument(
+      await databases.deleteDocument(
         appwriteConfig.databaseId,
         appwriteConfig.collections.customers,
-        customerId,
-        { isActive: false }
+        customerId
       );
     } catch (error) {
       console.error('Error deleting customer:', error);
