@@ -14,6 +14,8 @@ export interface CompanyInfo {
   email: string;
   phone: string;
   taxNumber: string;
+  bankName?: string;
+  iban?: string;
 }
 
 export interface CustomerInfo {
@@ -21,6 +23,8 @@ export interface CustomerInfo {
   address: string;
   city: string;
   taxNumber: string;
+  bankName?: string;
+  iban?: string;
 }
 
 export interface Invoice {

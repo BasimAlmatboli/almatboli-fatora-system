@@ -1,12 +1,21 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, FileText, Download, Printer as Print, FileDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, FileText, Download, Printer as Print, FileDown, Save } from 'lucide-react';
 import { Invoice, InvoiceItem, CompanyInfo, CustomerInfo } from '../types/Invoice';
 import QRCodeComponent from './QRCodeComponent';
 import { generateZatcaQrCode } from '../utils/qrCodeUtils';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { invoiceService } from '../services/invoiceService';
+import { companyService } from '../services/companyService';
+import { customerService } from '../services/customerService';
 
-const InvoiceForm: React.FC = () => {
+interface InvoiceFormProps {
+  invoiceId?: string | null;
+  viewMode?: boolean;
+  onSaveComplete?: () => void;
+}
+
+const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, viewMode = false, onSaveComplete }) => {
   // Helper function to format numbers with thousand separators
   const formatNumber = (num: number): string => {
     return num.toLocaleString('en-US', {
@@ -15,35 +24,28 @@ const InvoiceForm: React.FC = () => {
     });
   };
 
-  // Predefined customers
-  const PREDEFINED_CUSTOMERS: CustomerInfo[] = [
-    {
-      name: 'شركة هنقرستيشن المحدودة',
-      address: 'حي الياسمين - طريق الملك عبدالعزيز',
-      city: 'الرياض - السعودية',
-      taxNumber: '310069655100003'
-    },
-    {
-      name: 'شركة كيتا تكنولوجيز العربية المحدودة',
-      address: '7782 طريق الملك عبدالعزيز . 5654 حي الربيع',
-      city: 'الرياض - المملكة العربية السعودية 13315',
-      taxNumber: '312187366900003'
-    }
-  ];
+  // State for customers and company loaded from database
+  const [customers, setCustomers] = useState<CustomerInfo[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
   const [invoice, setInvoice] = useState<Invoice>({
     id: Math.random().toString(36).substr(2, 9),
-    number: '0002453',
+    number: '',
     date: new Date().toISOString().split('T')[0],
     company: {
-      name: 'مؤسسة الماسة الغربية للخدمات اللوجستية',
-      address: 'حي الاجاويد - شارع بدية- مبنى 5100',
-      city: '                     جدة - السعودية',
+      name: '',
+      address: '',
+      city: '',
       email: '',
       phone: '',
-      taxNumber: '311684171400003'
+      taxNumber: ''
     },
-    customer: PREDEFINED_CUSTOMERS[0],
+    customer: {
+      name: '',
+      address: '',
+      city: '',
+      taxNumber: ''
+    },
     items: [],
     subtotal: 0,
     taxAmount: 0,
@@ -62,6 +64,145 @@ const InvoiceForm: React.FC = () => {
   });
 
   const [showPreview, setShowPreview] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Load company and customers from database
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoadingData(true);
+
+        // Load company info
+        const companyData = await companyService.getCompanyInfo();
+
+        // Load customers
+        const customersData = await customerService.listCustomers();
+
+        setCustomers(customersData);
+
+        // Set company data
+        setInvoice(prev => ({
+          ...prev,
+          company: {
+            name: companyData.name,
+            address: companyData.address,
+            city: companyData.city,
+            email: companyData.email || '',
+            phone: companyData.phone || '',
+            taxNumber: companyData.taxNumber,
+            bankName: companyData.bankName || '',
+            iban: companyData.iban || ''
+          },
+          customer: customersData.length > 0 ? customersData[0] : prev.customer
+        }));
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setSaveMessage({ type: 'error', text: 'فشل في تحميل البيانات من قاعدة البيانات' });
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Auto-generate invoice number when component mounts (only for new invoices)
+  useEffect(() => {
+    // Don't generate a new number if we're editing or viewing an existing invoice
+    if (invoiceId) return;
+
+    const loadInvoiceNumber = async () => {
+      try {
+        const nextNumber = await invoiceService.getNextInvoiceNumber();
+        setInvoice(prev => ({ ...prev, number: nextNumber }));
+      } catch (error) {
+        console.error('Error loading invoice number:', error);
+      }
+    };
+
+    loadInvoiceNumber();
+  }, [invoiceId]);
+
+  // Load invoice for editing if invoiceId is provided
+  useEffect(() => {
+    if (!invoiceId) return;
+
+    const loadInvoiceForEdit = async () => {
+      try {
+        setLoadingData(true);
+        const { invoice: invoiceData, items } = await invoiceService.getInvoice(invoiceId);
+
+        // Get current company info to preserve it
+        const companyData = await companyService.getCompanyInfo();
+
+        // Get customer info by tax number (customerId stores tax number)
+        let customerDetails: CustomerInfo | null = null;
+        if (invoiceData.customerId) {
+          const fetchedCustomer = await customerService.getCustomerByTaxNumber(invoiceData.customerId);
+          if (fetchedCustomer) {
+            customerDetails = fetchedCustomer;
+          }
+        }
+
+        setInvoice({
+          id: invoiceData.$id || '',
+          number: invoiceData.invoiceNumber,
+          date: invoiceData.date,
+
+          company: {
+            name: companyData.name,
+            address: companyData.address,
+            city: companyData.city,
+            email: companyData.email,
+            phone: companyData.phone,
+            taxNumber: companyData.taxNumber,
+            bankName: companyData.bankName || '',
+            iban: companyData.iban || ''
+          },
+          customer: {
+            name: invoiceData.customerName,
+            taxNumber: invoiceData.customerId,
+            address: customerDetails?.address || '',
+            city: customerDetails?.city || '',
+            bankName: customerDetails?.bankName || '',
+            iban: customerDetails?.iban || ''
+          },
+          items: items.map(item => ({
+            id: item.$id || '',
+            description: item.description,
+            quantity: item.quantity,
+            price: item.price,
+            taxRate: item.taxRate,
+            total: item.total
+          })),
+          subtotal: invoiceData.subtotal,
+          taxAmount: invoiceData.taxAmount,
+          total: invoiceData.total,
+          paid: invoiceData.paid,
+          discount: invoiceData.discount,
+          remaining: invoiceData.remaining,
+          notes: invoiceData.notes || ''
+        });
+      } catch (error) {
+        console.error('Error loading invoice:', error);
+        setSaveMessage({ type: 'error', text: 'فشل في تحميل الفاتورة' });
+      } finally {
+        setLoadingData(false);
+      }
+    };
+
+    loadInvoiceForEdit();
+  }, [invoiceId]);
+
+  // Auto-show preview when in view mode
+  useEffect(() => {
+    if (viewMode) {
+      setShowPreview(true);
+    } else {
+      setShowPreview(false);
+    }
+  }, [viewMode]);
 
   const addItem = () => {
     if (newItem.description.trim() === '') return;
@@ -92,6 +233,7 @@ const InvoiceForm: React.FC = () => {
       description: '',
       quantity: 1,
       price: 0,
+      taxRate: 15
     });
   };
 
@@ -153,7 +295,7 @@ const InvoiceForm: React.FC = () => {
   const handleCustomerChange = (customerIndex: number) => {
     setInvoice({
       ...invoice,
-      customer: PREDEFINED_CUSTOMERS[customerIndex]
+      customer: customers[customerIndex]
     });
   };
 
@@ -205,35 +347,87 @@ const InvoiceForm: React.FC = () => {
     }
   };
 
+  const handleSaveInvoice = async () => {
+    if (invoice.items.length === 0) {
+      setSaveMessage({ type: 'error', text: 'الرجاء إضافة عناصر للفاتورة' });
+      return;
+    }
+
+    if (!invoice.number || invoice.number.trim() === '') {
+      setSaveMessage({ type: 'error', text: 'الرجاء إدخال رقم الفاتورة' });
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      // If invoiceId exists, we're editing an existing invoice
+      if (invoiceId) {
+        await invoiceService.updateInvoice(invoiceId, invoice);
+        setSaveMessage({ type: 'success', text: `تم تحديث الفاتورة رقم ${invoice.number} بنجاح` });
+      } else {
+        // Otherwise, create a new invoice
+        await invoiceService.createInvoice(invoice);
+        setSaveMessage({ type: 'success', text: `تم حفظ الفاتورة رقم ${invoice.number} بنجاح` });
+      }
+
+      // Clear the message after 3 seconds and either navigate or start new invoice
+      setTimeout(() => {
+        setSaveMessage(null);
+        if (onSaveComplete) {
+          onSaveComplete();
+        } else {
+          newInvoice(); // Reset form for new invoice
+        }
+      }, 3000);
+    } catch (error) {
+      console.error('Save error:', error);
+      setSaveMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'فشل في حفظ الفاتورة'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const newInvoice = async () => {
+    try {
+      // Get next invoice number
+      const nextNumber = await invoiceService.getNextInvoiceNumber();
+
+      // Reset invoice with new number
+      setInvoice({
+        id: Math.random().toString(36).substr(2, 9),
+        number: nextNumber,
+        date: new Date().toISOString().split('T')[0],
+        company: invoice.company, // Keep company info
+        customer: customers.length > 0 ? customers[0] : invoice.customer, // Reset to first customer
+        items: [],
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+        paid: 0,
+        discount: 0,
+        remaining: 0,
+        notes: ''
+      });
+
+      setSaveMessage(null);
+    } catch (error) {
+      console.error('Error creating new invoice:', error);
+      setSaveMessage({ type: 'error', text: 'فشل في إنشاء فاتورة جديدة' });
+    }
+  };
+
   if (showPreview) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4" dir="rtl">
+      <div className="min-h-screen bg-gray-50 p-4 pb-24" dir="rtl">
         <div className="max-w-4xl mx-auto">
           <div id="invoice-content" className="bg-white rounded-lg shadow-lg p-8 print:shadow-none print:p-0">
-            <div className="flex justify-between items-center mb-6 print:hidden">
-              <button
-                onClick={() => setShowPreview(false)}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-              >
-                العودة للتعديل
-              </button>
-              <div className="space-x-2 flex gap-2">
-                <button
-                  onClick={handleDownloadPDF}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
-                >
-                  <FileDown size={16} />
-                  تحميل PDF
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-                >
-                  <Print size={16} />
-                  طباعة
-                </button>
-              </div>
-            </div>
+            {/* Header buttons removed */}
+            <div className="mb-6 print:hidden"></div>
 
             {/* Invoice Header */}
             <div className="border-b-2 border-gray-300 pb-6 mb-6">
@@ -280,7 +474,7 @@ const InvoiceForm: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 justify-end">
                   <span className="text-gray-600">التاريخ:</span>
-                  <span className="font-semibold">{invoice.date}</span>
+                  <span className="font-semibold">{invoice.date?.split('T')[0]}</span>
                 </div>
               </div>
             </div>
@@ -348,8 +542,8 @@ const InvoiceForm: React.FC = () => {
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-gray-800 mb-3 text-right">معلومات الحساب البنكي</h3>
                     <div className="space-y-2 text-sm text-gray-600 text-right">
-                      <div><strong>البنك:</strong> مصرف الراجحي</div>
-                      <div><strong>الايبان:</strong> SA8780000206608010589879</div>
+                      <div><strong>البنك:</strong> {invoice.customer.bankName || ''}</div>
+                      <div><strong>الايبان:</strong> {invoice.customer.iban || ''}</div>
                     </div>
                   </div>
                 </div>
@@ -367,12 +561,40 @@ const InvoiceForm: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Fixed Preview Footer Actions */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-50 print:hidden">
+          <div className="max-w-4xl mx-auto flex justify-between items-center">
+            <button
+              onClick={() => setShowPreview(false)}
+              className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
+            >
+              العودة للتعديل
+            </button>
+            <div className="flex gap-4">
+              <button
+                onClick={handlePrint}
+                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
+              >
+                <Print size={18} />
+                طباعة
+              </button>
+              <button
+                onClick={handleDownloadPDF}
+                className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
+              >
+                <FileDown size={18} />
+                تحميل PDF
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4" dir="rtl">
+    <div className="min-h-screen bg-gray-50 p-4 pb-24" dir="rtl">
       <div className="max-w-6xl mx-auto">
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-6">
@@ -380,14 +602,21 @@ const InvoiceForm: React.FC = () => {
               <FileText className="text-blue-600" />
               إنشاء فاتورة ضريبية
             </h1>
-            <button
-              onClick={() => setShowPreview(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Download size={16} />
-              معاينة الفاتورة
-            </button>
+            <div></div>
           </div>
+
+          {/* Success/Error Message */}
+          {saveMessage && (
+            <div className={`mb-4 p-4 rounded-md ${saveMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+              <div className="flex items-center gap-2">
+                {saveMessage.type === 'success' ? '✓' : '✗'}
+                <span className="font-medium">{saveMessage.text}</span>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {/* Company Information - Fixed Display */}
@@ -410,8 +639,9 @@ const InvoiceForm: React.FC = () => {
                 onChange={(e) => handleCustomerChange(parseInt(e.target.value))}
                 className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"
                 defaultValue="0"
+                disabled={loadingData || customers.length === 0}
               >
-                {PREDEFINED_CUSTOMERS.map((customer, index) => (
+                {customers.map((customer: CustomerInfo, index: number) => (
                   <option key={index} value={index}>
                     {customer.name}
                   </option>
@@ -601,6 +831,27 @@ const InvoiceForm: React.FC = () => {
               />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Fixed Footer Actions */}
+      <div className="fixed bottom-0 left-0 right-64 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40">
+        <div className="max-w-6xl mx-auto flex justify-center gap-4">
+          <button
+            onClick={() => setShowPreview(true)}
+            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
+          >
+            <Download size={18} />
+            معاينة الفاتورة
+          </button>
+          <button
+            onClick={handleSaveInvoice}
+            disabled={isSaving}
+            className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2 font-medium shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <Save size={18} />
+            {isSaving ? 'جاري الحفظ...' : 'حفظ الفاتورة'}
+          </button>
         </div>
       </div>
     </div>
