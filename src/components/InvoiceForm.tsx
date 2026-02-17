@@ -655,7 +655,7 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, viewMode = false, 
                   <div><strong>الرقم الضريبي:</strong> {invoice.customer.taxNumber}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input
                   type="text"
                   placeholder="رقم الفاتورة"
@@ -835,8 +835,8 @@ const InvoiceForm: React.FC<InvoiceFormProps> = ({ invoiceId, viewMode = false, 
       </div>
 
       {/* Fixed Footer Actions */}
-      <div className="fixed bottom-0 left-0 right-64 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40">
-        <div className="max-w-6xl mx-auto flex justify-center gap-4">
+      <div className="fixed bottom-0 left-0 lg:right-64 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-center gap-4">
           <button
             onClick={() => setShowPreview(true)}
             className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-sm"

@@ -134,7 +134,93 @@ const InvoiceList: React.FC<InvoiceListProps> = ({ onViewInvoice, onDownloadInvo
                         </div>
                     ) : (
                         <>
-                            <div className="overflow-x-auto">
+                            {/* Mobile: Cards (visible only on small screens) */}
+                            <div className="block md:hidden space-y-4">
+                                {invoices.map((invoice) => (
+                                    <div key={invoice.$id} className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
+                                        {/* Header with Invoice Number and Status */}
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div>
+                                                <span className="text-sm text-gray-500">رقم الفاتورة</span>
+                                                <div className="font-bold text-blue-600 text-lg">{invoice.invoiceNumber}</div>
+                                            </div>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${invoice.status === 'paid'
+                                                ? 'bg-green-100 text-green-800'
+                                                : invoice.status === 'finalized'
+                                                    ? 'bg-blue-100 text-blue-800'
+                                                    : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                {invoice.status === 'paid' ? 'مدفوعة' : invoice.status === 'finalized' ? 'نهائية' : 'مسودة'}
+                                            </span>
+                                        </div>
+
+                                        {/* Date and Customer */}
+                                        <div className="space-y-2 mb-4">
+                                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                <Calendar size={14} />
+                                                <span>{formatDate(invoice.date)}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-gray-700">
+                                                <User size={14} />
+                                                <span className="truncate">{invoice.customerName}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Amounts */}
+                                        <div className="grid grid-cols-2 gap-4 mb-4 p-3 bg-gray-50 rounded-md">
+                                            <div>
+                                                <span className="text-xs text-gray-500 block">المبلغ الإجمالي</span>
+                                                <span className="font-semibold text-gray-800">{formatNumber(invoice.total)} ريال</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-xs text-gray-500 block">المتبقي</span>
+                                                <span className={`font-semibold ${invoice.remaining > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                    {formatNumber(invoice.remaining)} ريال
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="grid grid-cols-4 gap-2">
+                                            <button
+                                                onClick={() => onEditInvoice?.(invoice.$id!)}
+                                                className="p-3 text-green-600 hover:bg-green-50 rounded-md transition-colors flex flex-col items-center gap-1"
+                                                title="تعديل"
+                                            >
+                                                <Edit size={20} />
+                                                <span className="text-xs">تعديل</span>
+                                            </button>
+                                            <button
+                                                onClick={() => onViewInvoice?.(invoice.$id!)}
+                                                className="p-3 text-blue-600 hover:bg-blue-50 rounded-md transition-colors flex flex-col items-center gap-1"
+                                                title="عرض"
+                                            >
+                                                <Eye size={20} />
+                                                <span className="text-xs">عرض</span>
+                                            </button>
+                                            <button
+                                                onClick={() => onDownloadInvoice?.(invoice.$id!)}
+                                                className="p-3 text-purple-600 hover:bg-purple-50 rounded-md transition-colors flex flex-col items-center gap-1"
+                                                title="تحميل"
+                                            >
+                                                <FileDown size={20} />
+                                                <span className="text-xs">تحميل</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(invoice.$id!, invoice.invoiceNumber)}
+                                                className="p-3 text-red-600 hover:bg-red-50 rounded-md transition-colors flex flex-col items-center gap-1"
+                                                title="حذف"
+                                            >
+                                                <Trash2 size={20} />
+                                                <span className="text-xs">حذف</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Desktop: Table (hidden on small screens) */}
+                            <div className="hidden md:block overflow-x-auto">
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 border-b-2 border-gray-200">

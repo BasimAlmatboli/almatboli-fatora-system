@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, List, Settings as SettingsIcon } from 'lucide-react';
+import { FileText, List, Settings as SettingsIcon, Menu, X } from 'lucide-react';
 import InvoiceForm from './components/InvoiceForm';
 import InvoiceList from './components/InvoiceList';
 import Settings from './components/Settings';
@@ -10,6 +10,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('create');
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [viewingInvoiceId, setViewingInvoiceId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleEditInvoice = (invoiceId: string) => {
     setEditingInvoiceId(invoiceId);
@@ -39,8 +40,33 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden" dir="rtl">
+      {/* Mobile Menu Button */}
+      <button
+        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        className="lg:hidden fixed top-4 right-4 z-50 p-3 bg-white rounded-lg shadow-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+        aria-label="Toggle menu"
+      >
+        {isMobileMenuOpen ? <X size={24} className="text-slate-700" /> : <Menu size={24} className="text-slate-700" />}
+      </button>
+
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-l border-slate-200 flex flex-col z-20 shrink-0 transition-all duration-300">
+      <aside className={`
+        fixed lg:static
+        w-64 bg-white border-l border-slate-200 flex flex-col
+        z-40 lg:z-20 shrink-0
+        h-full
+        transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}
+        lg:translate-x-0
+      `}>
         {/* Branding */}
         <div className="h-32 flex flex-col items-center justify-center border-b border-slate-200 bg-white p-4 text-center">
           <div className="bg-blue-600 p-2.5 rounded-xl mb-3 shadow-lg shadow-blue-500/20">
@@ -55,7 +81,7 @@ function App() {
         {/* Navigation Links */}
         <nav className="flex-1 py-6 px-3 space-y-2 overflow-y-auto">
           <button
-            onClick={handleNewInvoice}
+            onClick={() => { handleNewInvoice(); setIsMobileMenuOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${currentPage === 'create'
               ? 'bg-blue-50 text-blue-700 shadow-sm border-r-4 border-blue-600'
               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -68,7 +94,7 @@ function App() {
           </button>
 
           <button
-            onClick={() => setCurrentPage('list')}
+            onClick={() => { setCurrentPage('list'); setIsMobileMenuOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${currentPage === 'list'
               ? 'bg-blue-50 text-blue-700 shadow-sm border-r-4 border-blue-600'
               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -83,7 +109,7 @@ function App() {
           <div className="border-t border-slate-200 my-4 pt-4 box-border mx-2"></div>
 
           <button
-            onClick={() => setCurrentPage('settings')}
+            onClick={() => { setCurrentPage('settings'); setIsMobileMenuOpen(false); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group ${currentPage === 'settings'
               ? 'bg-blue-50 text-blue-700 shadow-sm border-r-4 border-blue-600'
               : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
